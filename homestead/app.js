@@ -7,6 +7,8 @@ const express = require('express');
 const cors = require('cors');
 const { xdr, StrKey, nativeToScVal, scValToNative } = require('@stellar/stellar-sdk');
 const { spawn } = require('child_process');
+const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const routes = require('./routes');
 const config = require(process.env.CONFIG || './config.json');
@@ -129,6 +131,33 @@ async function work(mining, key, blockData, onStart) {
 }
 
 async function mine(minerExec, block, hash, nonce, difficulty, key, maxThreads, batchSize, platform, device, gpu, verbose, onStart = null) {
+
+    const tmpFile = path.join(os.tmpdir(), 'kale_miner.json');
+    const unserialize = () => {
+        try {
+            return config.miner?.serialize && fs.existsSync(tmpFile)
+                ? JSON.parse(fs.readFileSync(tmpFile, 'utf-8')) : null;
+        } catch {
+            return null;
+        }
+    };
+    const serialize = (data) => {
+        try {
+            if (config.miner?.serialize) {
+                fs.writeFileSync(tmpFile, JSON.stringify(data));
+            }
+        } catch (err) {
+            console.error(`Failed to serialize work: ${err}`);
+        }
+    };
+
+    let data = unserialize();
+    const farmer = data?.[key];
+    if (farmer && farmer.block === block && farmer.hash === hash) {
+        console.log(`Farmer ${key} using serialized mining result for block ${block}`);
+        return { work: farmer.work };
+    }
+
     return new Promise((resolve, reject) => {
         const args = [
             block, hash, nonce, difficulty, key,
@@ -174,7 +203,11 @@ async function mine(minerExec, block, hash, nonce, difficulty, key, maxThreads, 
             try {
                 const result = output.match(/{[\s\S]*?}/);
                 if (result) {
-                    resolve({ work: JSON.parse(result[0]) });
+                    const work = JSON.parse(result[0]);
+                    data = data || {};
+                    data[key] = { block, hash, work };
+                    serialize(data);
+                    resolve({ work });
                 } else {
                     reject(new Error(`No result found`));
                 }
