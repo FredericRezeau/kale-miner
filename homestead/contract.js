@@ -212,16 +212,8 @@ async function invoke(method, data) {
             params = `with ${(data.amount / 10000000).toFixed(7)} KALE`;
             break;
         case 'work':
-            if (config.stellar?.networkPassphrase === Networks.FUTURENET) {
-                args = contract.call('work', 
-                    new Address(data.farmer).toScVal(),
-                    nativeToScVal(data.nonce, { type: 'u64' }));
-            } else {
-                args = contract.call('work', 
-                    new Address(data.farmer).toScVal(),
-                    xdr.ScVal.scvBytes(Buffer.from(data.hash, 'hex')),
-                    nativeToScVal(data.nonce, { type: 'u64' }));
-            }
+            args = contract.call('work', new Address(data.farmer).toScVal(), xdr.ScVal.scvBytes(Buffer.from(data.hash, 'hex')),
+                nativeToScVal(data.nonce, { type: 'u64' }));
             params = `with ${data.hash}/${data.nonce}`;
             break;
         case 'harvest':
